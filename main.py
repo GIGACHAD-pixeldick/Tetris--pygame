@@ -28,15 +28,24 @@ figures_rect = pg.Rect(0, 0, TILE - 2, TILE - 2)
 field = [[0 for i in range(WEIGHT)] for j in range(HEIGHT)]
 
 animation_count, animation_speed, animation_limit = 0, 60, 2000
-figure = deepcopy(choice(figures))
 
 bg = pg.image.load('resources/bg.jpg').convert()
-game_bg = pg.image.load('resources/gamebg.png').convert()
+game_bg = pg.image.load('resources/gamebg.jpg').convert()
 
-#main_font = pg.font.Font('resources/font.ttf').convert()
+main_font = pg.font.Font('resources/font.ttf', 65)
+font = pg.font.Font('resources/font.ttf', 45)
+
+title_tetris = main_font.render("TETRIS", True, pg.Color('darkorange'))
+title_score = font.render('score:', True, pg.Color('green'))
+title_record = font.render('record:', True, pg.Color('purple'))
 
 get_color = lambda: (randrange(30, 256), randrange(30,256), randrange(30, 256))
-color = get_color()
+color, next_color = get_color(), get_color()
+
+score, lines = 0, 0
+scores = {0: 0, 1: 100, 2: 300, 3: 700, 4: 1500}
+
+figure, next_figure = deepcopy(choice(figures)), deepcopy(choice(figures))
 
 def check_borders():
     if figure[i].x < 0 or figure[i].x > WEIGHT - 1:
@@ -45,11 +54,31 @@ def check_borders():
         return False
     return True
 
+def get_record():
+    try:
+        with open('record') as file:
+            return file.readline()
+    except FileNotFoundError():
+        with open('record', 'w') as file:
+            file.write('0')
+
+def set_record(record, score):
+    rec = max(int(record), score)
+    with open('record', 'w') as f:
+        file.write(str(rec))
+
+
 while True:
+    record = get_record()
     dx, rotate = 0, False
     sc.blit(bg, (0, 0))
     sc.blit(game_sc, (20, 20))
     game_sc.blit(game_bg, (0, 0))
+
+    # delay for full lines
+    for i in range(lines):
+        pg.time.wait(200)
+
     # control
     for event in pg.event.get():
         if event.type == pg.QUIT:
@@ -82,8 +111,8 @@ while True:
             if not check_borders():
                 for i in range(4):
                     field[figure_old[i].y][figure_old[i].x] = color
-                color = get_color()
-                figure = deepcopy(choice(figures))
+                figure, color = next_figure, next_color
+                next_figure, next_color = deepcopy(choice(figures)), get_color()
                 animation_limit = 2000
                 break
 
@@ -101,7 +130,7 @@ while True:
                 break
 
     # check lines
-    line = HEIGHT - 1
+    line, lines = HEIGHT - 1, 0
     for row in range(HEIGHT - 1, -1, -1):
         count = 0
         for i in range(WEIGHT):
@@ -110,6 +139,12 @@ while True:
             field[line][i] = field[row][i]
         if count < WEIGHT:
             line -= 1
+        else:
+            animation_speed += 3
+            lines += 1
+    
+    # calculate score
+    score += scores[lines]
 
     # draw grid
     [pg.draw.rect(game_sc, (40, 40, 40), i_rect, 1) for i_rect in grid]
@@ -126,6 +161,32 @@ while True:
             if col:
                 figures_rect.x, figures_rect.y = x * TILE, y * TILE
                 pg.draw.rect(game_sc, col, figures_rect)
+
+    # draw next figure
+    for i in range(4):
+        figures_rect.x = next_figure[i].x * TILE + 380
+        figures_rect.y = next_figure[i].y * TILE + 185
+        pg.draw.rect(sc, next_color, figures_rect)
+
+    # draw titles
+    sc.blit(title_tetris, (485, -10))
+    sc.blit(title_score, (535, 780))
+    sc.blit(font.render(str(score), True, pg.Color('white')), (550, 840))
+    sc.blit(title_record, (525, 650))
+    sc.blit(font.render(record, True, pg.Color('gold')), (550, 710))
+    
+    # game over
+    for i in range(WEIGHT):
+        if field[0][i]:
+            set_record(record, score)
+            field = [[0 for i in range(WEIGHT)] for i in range(HEIGHT)]
+            animation_count, animation_speed, animation_limit = 0, 60, 2000
+            score = 0
+            for i_rect in grid:
+                pg.draw.rect(game_sc, get_color, i_rect)
+                sc.blit(game_sc, (20, 20))
+                pg.display.flip()
+                clock.tick(200)
 
     pg.display.flip()
     clock.tick(FPS)
